@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const readline = require('readline');
 const db = require('./db');
 require('./events/logger'); // Initialize event logger
@@ -21,7 +23,8 @@ function menu() {
 4. Delete Record
 5. Search Record
 6. Sort Record
-7. Exit
+7. Export Data
+10. Exit
 =====================
   `);
 
@@ -150,8 +153,41 @@ function menu() {
           });
         });
         break;
+        
+case '7':
+  const recordsToExport = db.listRecords();
+  if (recordsToExport.length === 0) {
+    console.log('No records available to export.');
+    return menu();
+  }
 
-      case '7':
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[:.]/g, '-'); // e.g., 2025-11-19T09-30-15-123Z
+  const exportFileName = `export_${timestamp}.txt`;
+  const exportFile = path.join(__dirname, '..', exportFileName);
+
+  let content = '';
+  content += `=== NodeVault Export ===\n`;
+  content += `Export Date: ${now.toLocaleString()}\n`;
+  content += `Total Records: ${recordsToExport.length}\n`;
+  content += `File Name: ${exportFileName}\n`;
+  content += `========================\n\n`;
+
+  recordsToExport.forEach(r => {
+    content += `ID: ${r.id}\n`;
+    content += `Name: ${r.name}\n`;
+    content += `Value: ${r.value}\n`;
+    content += `Created At: ${r.createdAt}\n`;
+    content += `------------------------\n`;
+  });
+
+  fs.writeFileSync(exportFile, content, 'utf8');
+  console.log(`✅ Data exported successfully to ${exportFileName}.`);
+  menu();
+  break;
+
+
+      case '10':
         console.log('👋 Exiting NodeVault...');
         rl.close();
         break;
