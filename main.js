@@ -25,6 +25,7 @@ function menu() {
 5. Search Record
 6. Sort Record
 7. Export Data
+8. View Vault Statistics
 10. Exit
 =====================
   `);
@@ -183,6 +184,18 @@ case '7':
 
   fs.writeFileSync(exportFile, content, 'utf8');
   console.log(`Data exported successfully to ${exportFileName}.`);
+  menu();
+  break;
+
+case '8':
+  const stats = db.getVaultStatistics();
+  console.log("\nVault Statistics:");
+  console.log("--------------------------");
+  console.log(`Total Records: ${stats.total}`);
+  console.log(`Last Modified: ${stats.lastModified}`);
+  console.log(`Longest Name: ${stats.longestName} (${stats.longestNameLength} characters)`);
+  console.log(`Earliest Record: ${stats.earliest}`);
+  console.log(`Latest Record: ${stats.latest}`);
   menu();
   break;
 

@@ -89,5 +89,54 @@ function deleteRecord(id) {
   return record;
 }
 
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord };
+function getVaultStatistics() {
+  const data = fileDB.readDB();
+
+  if (data.length === 0) {
+    return {
+      total: 0,
+      lastModified: "No data",
+      longestName: "None",
+      longestNameLength: 0,
+      earliest: "N/A",
+      latest: "N/A"
+    };
+  }
+
+  // Total records
+  const total = data.length;
+
+  
+  const dbPath = path.join(__dirname, 'data.json'); // adjust if your DB file is elsewhere
+  let lastModified = "Unknown";
+  try {
+    const stats = fs.statSync(dbPath);
+    lastModified = stats.mtime.toISOString().replace("T", " ").split(".")[0];
+  } catch {}
+
+  
+  let longestName = "";
+  data.forEach(r => {
+    if (r.name.length > longestName.length) {
+      longestName = r.name;
+    }
+  });
+
+  
+  const dates = data.map(r => new Date(r.createdAt));
+  const earliest = new Date(Math.min(...dates)).toISOString().split("T")[0];
+  const latest = new Date(Math.max(...dates)).toISOString().split("T")[0];
+
+  return {
+    total,
+    lastModified,
+    longestName,
+    longestNameLength: longestName.length,
+    earliest,
+    latest
+  };
+}
+
+
+module.exports = { addRecord, listRecords, updateRecord, deleteRecord, getVaultStatistics };
 
