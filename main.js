@@ -7,6 +7,11 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
+// Helper to display a record
+function displayRecord(r) {
+  console.log(`ID: ${r.id} | Name: ${r.name} | Value: ${r.value} | Created At: ${r.createdAt}`);
+}
+
 function menu() {
   console.log(`
 ===== NodeVault =====
@@ -15,41 +20,69 @@ function menu() {
 3. Update Record
 4. Delete Record
 5. Search Record
-6. Exit
+6. Sort Record
+7. Exit
 =====================
   `);
 
   rl.question('Choose option: ', ans => {
     switch (ans.trim()) {
+
+      // --------------------- ADD RECORD -----------------------
       case '1':
         rl.question('Enter name: ', name => {
           rl.question('Enter value: ', value => {
-            db.addRecord({ name, value });
-            console.log('✅ Record added successfully!');
-            menu();
+            rl.question('Enter creation date (YYYY-MM-DD): ', createdAt => {
+
+              const date = new Date(createdAt);
+              if (isNaN(date)) {
+                console.log("❌ Invalid date format. Use YYYY-MM-DD.");
+                return menu();
+              }
+
+              const record = {
+                name,
+                value,
+                createdAt: date.toISOString().split('T')[0] // store as YYYY-MM-DD
+              };
+
+              db.addRecord(record);
+              console.log('✅ Record added successfully!');
+              displayRecord(record);
+              menu();
+
+            });
           });
         });
         break;
 
+      // --------------------- LIST RECORDS -----------------------
       case '2':
         const records = db.listRecords();
         if (records.length === 0) console.log('No records found.');
-        else records.forEach(r => console.log(`ID: ${r.id} | Name: ${r.name} | Value: ${r.value}`));
+        else records.forEach(displayRecord);
         menu();
         break;
 
+      // --------------------- UPDATE RECORD -----------------------
       case '3':
         rl.question('Enter record ID to update: ', id => {
           rl.question('New name: ', name => {
             rl.question('New value: ', value => {
-              const updated = db.updateRecord(Number(id), name, value);
-              console.log(updated ? '✅ Record updated!' : '❌ Record not found.');
+              const updatedRecord = db.updateRecord(Number(id), name, value);
+              if (updatedRecord) {
+                console.log('✅ Record updated!');
+                displayRecord(updatedRecord);
+              } else {
+                console.log('❌ Record not found.');
+              }
               menu();
             });
           });
         });
         break;
 
+      // --------------------- DELETE RECORD -----------------------
       case '4':
         rl.question('Enter record ID to delete: ', id => {
           const deleted = db.deleteRecord(Number(id));
@@ -57,35 +90,68 @@ function menu() {
           menu();
         });
         break;
-        
-        case '5':
+
+      // --------------------- SEARCH RECORD -----------------------
+      case '5':
         rl.question('Enter name or ID to search: ', term => {
           const allRecords = db.listRecords();
-
           const lowerTerm = term.toLowerCase();
 
-          const results = allRecords.filter(r => {
-            return (
-              r.id.toString() === term ||             
-              r.name.toLowerCase().includes(lowerTerm) || 
-              r.value.toLowerCase().includes(lowerTerm)  
-            );
-          });
+          const results = allRecords.filter(r => 
+            r.id.toString() === term ||
+            r.name.toLowerCase().includes(lowerTerm) ||
+            r.value.toLowerCase().includes(lowerTerm)
+          );
 
           if (results.length === 0) {
             console.log('🔍 No records found.');
           } else {
             console.log(`\n🔍 Found ${results.length} record(s):`);
-            results.forEach(r =>
-              console.log(`ID: ${r.id} | Name: ${r.name} | Value: ${r.value}`)
-            );
+            results.forEach(displayRecord);
           }
 
           menu();
         });
         break;
 
+      // --------------------- SORT RECORD -----------------------
       case '6':
+        const sortRecords = db.listRecords();
+        if (sortRecords.length === 0) {
+          console.log("No records available to sort.");
+          return menu();
+        }
+
+        rl.question("Sort by (name/date): ", field => {
+          field = field.trim().toLowerCase();
+          if (field !== "name" && field !== "date") {
+            console.log("Invalid field.");
+            return menu();
+          }
+
+          rl.question("Order (asc/desc): ", order => {
+            order = order.trim().toLowerCase();
+            if (order !== "asc" && order !== "desc") {
+              console.log("Invalid order.");
+              return menu();
+            }
+
+            const sorted = [...sortRecords];
+
+            if (field === "name") {
+              sorted.sort((a, b) => order === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+            } else if (field === "date") {
+              sorted.sort((a, b) => order === "asc" ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt));
+            }
+
+            console.log("\nSorted Records:");
+            sorted.forEach(displayRecord);
+            menu();
+          });
+        });
+        break;
+
+      case '7':
         console.log('👋 Exiting NodeVault...');
         rl.close();
         break;
@@ -98,3 +164,4 @@ function menu() {
 }
 
 menu();
+
