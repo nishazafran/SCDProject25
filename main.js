@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+
 const readline = require('readline');
 const db = require('./db');
 require('./events/logger'); // Initialize event logger
@@ -39,20 +40,19 @@ function menu() {
 
               const date = new Date(createdAt);
               if (isNaN(date)) {
-                console.log("❌ Invalid date format. Use YYYY-MM-DD.");
+                console.log("Invalid date format. Use YYYY-MM-DD.");
                 return menu();
               }
 
-              const record = {
-                name,
-                value,
-                createdAt: date.toISOString().split('T')[0] // store as YYYY-MM-DD
-              };
+              const newRecord = db.addRecord({
+          name,
+          value,
+          createdAt: date.toISOString().split('T')[0]
+        });
 
-              db.addRecord(record);
-              console.log('✅ Record added successfully!');
-              displayRecord(record);
-              menu();
+        console.log('Record added successfully!');
+        displayRecord(newRecord);   // SHOW correct record with ID
+        menu();
 
             });
           });
@@ -89,7 +89,7 @@ function menu() {
       case '4':
         rl.question('Enter record ID to delete: ', id => {
           const deleted = db.deleteRecord(Number(id));
-          console.log(deleted ? '🗑️ Record deleted!' : '❌ Record not found.');
+          console.log(deleted ? 'Record deleted!' : 'Record not found.');
           menu();
         });
         break;
@@ -107,9 +107,9 @@ function menu() {
           );
 
           if (results.length === 0) {
-            console.log('🔍 No records found.');
+            console.log('No records found.');
           } else {
-            console.log(`\n🔍 Found ${results.length} record(s):`);
+            console.log(`\nFound ${results.length} record(s):`);
             results.forEach(displayRecord);
           }
 
@@ -182,13 +182,13 @@ case '7':
   });
 
   fs.writeFileSync(exportFile, content, 'utf8');
-  console.log(`✅ Data exported successfully to ${exportFileName}.`);
+  console.log(`Data exported successfully to ${exportFileName}.`);
   menu();
   break;
 
 
       case '10':
-        console.log('👋 Exiting NodeVault...');
+        console.log('Exiting NodeVault...');
         rl.close();
         break;
 
