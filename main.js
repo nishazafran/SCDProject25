@@ -4,8 +4,11 @@ const readline = require('readline');
 const mongoose = require('mongoose');
 const db = require('./db');
 require('./events/logger');
+require('dotenv').config();
 
-const MONGO_URI = "mongodb://localhost:27017/nodevault";
+const MONGO_URI = process.env.MONGO_URI;
+console.log("Mongo URI from .env:", MONGO_URI);
+
 
 const rl = readline.createInterface({
 input: process.stdin,
