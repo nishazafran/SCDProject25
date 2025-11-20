@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const Record = require("./mongo");
+const recordUtils = require("./record");
+const vaultEvents = require("../events");
 
+// ------------------------------
+// BACKUP FUNCTION (works for Mongo)
+// ------------------------------
 function createBackup(records) {
   const backupsDir = path.join(__dirname, '..', 'backups');
   if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir);
@@ -10,87 +16,84 @@ function createBackup(records) {
     .replace(/[:.]/g, '-');
 
   const backupFile = path.join(backupsDir, `backup_${timestamp}.json`);
-
   fs.writeFileSync(backupFile, JSON.stringify(records, null, 2), 'utf8');
-  console.log(`WBackup created: ${backupFile}`);
+
+  console.log(`💾 Backup created: ${backupFile}`);
 }
 
-const fileDB = require('./file');
-const recordUtils = require('./record');
-const vaultEvents = require('../events');
-
-
 // ------------------------------
-// ADD RECORD (Backup FIXED)
+// ADD RECORD
 // ------------------------------
-function addRecord({ name, value, createdAt }) {
+async function addRecord({ name, value, createdAt }) {
   recordUtils.validateRecord({ name, value, createdAt });
 
-  const data = fileDB.readDB();
-
-  const newRecord = {
+  const newRecord = new Record({
     id: recordUtils.generateId(),
     name,
     value,
-    createdAt: new Date(createdAt).toISOString().split('T')[0]
-  };
+    createdAt: new Date(createdAt).toISOString().split("T")[0],
+  });
 
-  data.push(newRecord);
-  fileDB.writeDB(data);
+  await newRecord.save();
+  vaultEvents.emit("recordAdded", newRecord);
 
-  // FIX: Now backup created on ADD
-  createBackup(data);
+  // Backup after adding
+  const all = await Record.find();
+  createBackup(all);
 
-  vaultEvents.emit('recordAdded', newRecord);
   return newRecord;
 }
 
-
 // ------------------------------
-function listRecords() {
-  return fileDB.readDB();
+// LIST RECORDS
+// ------------------------------
+async function listRecords() {
+  return await Record.find();
 }
 
-
 // ------------------------------
-// UPDATE RECORD (backup stays here)
+// UPDATE RECORD
 // ------------------------------
-function updateRecord(id, newName, newValue) {
-  const data = fileDB.readDB();
-  const record = data.find(r => r.id === id);
+async function updateRecord(id, newName, newValue) {
+  const record = await Record.findOne({ id });
   if (!record) return null;
 
   record.name = newName;
   record.value = newValue;
+  await record.save();
 
-  fileDB.writeDB(data);
+  vaultEvents.emit("recordUpdated", record);
 
-  createBackup(data);
+  // backup
+  const all = await Record.find();
+  createBackup(all);
 
-  vaultEvents.emit('recordUpdated', record);
   return record;
 }
 
-
 // ------------------------------
-// DELETE RECORD (correct backup)
+// DELETE RECORD
 // ------------------------------
-function deleteRecord(id) {
-  const data = fileDB.readDB();
-  const record = data.find(r => r.id === id);
+async function deleteRecord(id) {
+  const record = await Record.findOne({ id });
   if (!record) return null;
 
-  const filtered = data.filter(r => r.id !== id);
-  fileDB.writeDB(filtered);
+  await Record.deleteOne({ id });
 
-  createBackup(filtered);
+  vaultEvents.emit("recordDeleted", record);
 
-  vaultEvents.emit('recordDeleted', record);
+  // backup AFTER deletion
+  const all = await Record.find();
+  createBackup(all);
+
   return record;
 }
 
-function getVaultStatistics() {
-  const data = fileDB.readDB();
+// ------------------------------
+// VAULT STATISTICS (Mongo version)
+// ------------------------------
+async function getVaultStatistics() {
+  const data = await Record.find();
 
   if (data.length === 0) {
     return {
@@ -106,23 +109,21 @@ function getVaultStatistics() {
   // Total records
   const total = data.length;
 
-  
-  const dbPath = path.join(__dirname, 'data.json'); // adjust if your DB file is elsewhere
-  let lastModified = "Unknown";
-  try {
-    const stats = fs.statSync(dbPath);
-    lastModified = stats.mtime.toISOString().replace("T", " ").split(".")[0];
-  } catch {}
+  // Last modified = latest updatedAt Mongo timestamp
+  const lastModified = new Date(
+    Math.max(...data.map(r => new Date(r.updatedAt || r.createdAt)))
+  )
+    .toISOString()
+    .replace("T", " ")
+    .split(".")[0];
 
-  
+  // Longest name
   let longestName = "";
   data.forEach(r => {
-    if (r.name.length > longestName.length) {
-      longestName = r.name;
-    }
+    if (r.name.length > longestName.length) longestName = r.name;
   });
 
-  
+  // Earliest & latest createdAt
   const dates = data.map(r => new Date(r.createdAt));
   const earliest = new Date(Math.min(...dates)).toISOString().split("T")[0];
   const latest = new Date(Math.max(...dates)).toISOString().split("T")[0];
@@ -137,6 +138,11 @@ function getVaultStatistics() {
   };
 }
 
-
-module.exports = { addRecord, listRecords, updateRecord, deleteRecord, getVaultStatistics };
+module.exports = {
+  addRecord,
+  listRecords,
+  updateRecord,
+  deleteRecord,
+  getVaultStatistics
+};
 

@@ -1,216 +1,174 @@
 const fs = require('fs');
 const path = require('path');
-
 const readline = require('readline');
+const mongoose = require('mongoose');
 const db = require('./db');
-require('./events/logger'); // Initialize event logger
+require('./events/logger');
+
+const MONGO_URI = "mongodb://localhost:27017/nodevault";
 
 const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
+input: process.stdin,
+output: process.stdout
 });
 
-// Helper to display a record
-function displayRecord(r) {
-  console.log(`ID: ${r.id} | Name: ${r.name} | Value: ${r.value} | Created At: ${r.createdAt}`);
+function ask(question) {
+return new Promise(function(resolve){ rl.question(question, resolve); });
 }
 
-function menu() {
-  console.log(`
-===== NodeVault =====
-1. Add Record
-2. List Records
-3. Update Record
-4. Delete Record
-5. Search Record
-6. Sort Record
-7. Export Data
-8. View Vault Statistics
-10. Exit
-=====================
-  `);
+function displayRecord(r) {
+console.log("ID: " + r.id + " | Name: " + r.name + " | Value: " + r.value + " | Created At: " + r.createdAt);
+}
 
-  rl.question('Choose option: ', ans => {
-    switch (ans.trim()) {
+async function menu() {
+console.log(
+"===== NodeVault =====\n" +
+"1. Add Record\n" +
+"2. List Records\n" +
+"3. Update Record\n" +
+"4. Delete Record\n" +
+"5. Search Record\n" +
+"6. Sort Record\n" +
+"7. Export Data\n" +
+"8. View Vault Statistics\n" +
+"9. Exit\n" +
+"====================="
+);
 
-      // --------------------- ADD RECORD -----------------------
-      case '1':
-        rl.question('Enter name: ', name => {
-          rl.question('Enter value: ', value => {
-            rl.question('Enter creation date (YYYY-MM-DD): ', createdAt => {
+var ans = (await ask("Choose option: ")).trim();
 
-              const date = new Date(createdAt);
-              if (isNaN(date)) {
-                console.log("Invalid date format. Use YYYY-MM-DD.");
-                return menu();
-              }
+switch(ans) {
 
-              const newRecord = db.addRecord({
-          name,
-          value,
-          createdAt: date.toISOString().split('T')[0]
-        });
 
-        console.log('Record added successfully!');
-        displayRecord(newRecord);   // SHOW correct record with ID
-        menu();
-
-            });
-          });
-        });
-        break;
-
-      // --------------------- LIST RECORDS -----------------------
-      case '2':
-        const records = db.listRecords();
-        if (records.length === 0) console.log('No records found.');
-        else records.forEach(displayRecord);
-        menu();
-        break;
-
-      // --------------------- UPDATE RECORD -----------------------
-      case '3':
-        rl.question('Enter record ID to update: ', id => {
-          rl.question('New name: ', name => {
-            rl.question('New value: ', value => {
-              const updatedRecord = db.updateRecord(Number(id), name, value);
-              if (updatedRecord) {
-                console.log('✅ Record updated!');
-                displayRecord(updatedRecord);
-              } else {
-                console.log('❌ Record not found.');
-              }
-              menu();
-            });
-          });
-        });
-        break;
-
-      // --------------------- DELETE RECORD -----------------------
-      case '4':
-        rl.question('Enter record ID to delete: ', id => {
-          const deleted = db.deleteRecord(Number(id));
-          console.log(deleted ? 'Record deleted!' : 'Record not found.');
-          menu();
-        });
-        break;
-
-      // --------------------- SEARCH RECORD -----------------------
-      case '5':
-        rl.question('Enter name or ID to search: ', term => {
-          const allRecords = db.listRecords();
-          const lowerTerm = term.toLowerCase();
-
-          const results = allRecords.filter(r => 
-            r.id.toString() === term ||
-            r.name.toLowerCase().includes(lowerTerm) ||
-            r.value.toLowerCase().includes(lowerTerm)
-          );
-
-          if (results.length === 0) {
-            console.log('No records found.');
-          } else {
-            console.log(`\nFound ${results.length} record(s):`);
-            results.forEach(displayRecord);
-          }
-
-          menu();
-        });
-        break;
-
-      // --------------------- SORT RECORD -----------------------
-      case '6':
-        const sortRecords = db.listRecords();
-        if (sortRecords.length === 0) {
-          console.log("No records available to sort.");
-          return menu();
-        }
-
-        rl.question("Sort by (name/date): ", field => {
-          field = field.trim().toLowerCase();
-          if (field !== "name" && field !== "date") {
-            console.log("Invalid field.");
-            return menu();
-          }
-
-          rl.question("Order (asc/desc): ", order => {
-            order = order.trim().toLowerCase();
-            if (order !== "asc" && order !== "desc") {
-              console.log("Invalid order.");
-              return menu();
-            }
-
-            const sorted = [...sortRecords];
-
-            if (field === "name") {
-              sorted.sort((a, b) => order === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-            } else if (field === "date") {
-              sorted.sort((a, b) => order === "asc" ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt));
-            }
-
-            console.log("\nSorted Records:");
-            sorted.forEach(displayRecord);
-            menu();
-          });
-        });
-        break;
-        
-case '7':
-  const recordsToExport = db.listRecords();
-  if (recordsToExport.length === 0) {
-    console.log('No records available to export.');
-    return menu();
+case '1': {
+  var name = await ask('Enter name: ');
+  var value = await ask('Enter value: ');
+  var createdAtInput = await ask('Enter creation date (YYYY-MM-DD): ');
+  var date = new Date(createdAtInput);
+  if (isNaN(date)) {
+    console.log("Invalid date format. Use YYYY-MM-DD.");
+    break;
   }
-
-  const now = new Date();
-  const timestamp = now.toISOString().replace(/[:.]/g, '-'); // e.g., 2025-11-19T09-30-15-123Z
-  const exportFileName = `export_${timestamp}.txt`;
-  const exportFile = path.join(__dirname, '..', exportFileName);
-
-  let content = '';
-  content += `=== NodeVault Export ===\n`;
-  content += `Export Date: ${now.toLocaleString()}\n`;
-  content += `Total Records: ${recordsToExport.length}\n`;
-  content += `File Name: ${exportFileName}\n`;
-  content += `========================\n\n`;
-
-  recordsToExport.forEach(r => {
-    content += `ID: ${r.id}\n`;
-    content += `Name: ${r.name}\n`;
-    content += `Value: ${r.value}\n`;
-    content += `Created At: ${r.createdAt}\n`;
-    content += `------------------------\n`;
-  });
-
-  fs.writeFileSync(exportFile, content, 'utf8');
-  console.log(`Data exported successfully to ${exportFileName}.`);
-  menu();
+  try {
+    var newRecord = await db.addRecord({ name: name, value: value, createdAt: date.toISOString().split('T')[0] });
+    console.log('Record added successfully!');
+    displayRecord(newRecord);
+  } catch(err) {
+    console.log("Error adding record: " + err.message);
+  }
   break;
+}
 
-case '8':
-  const stats = db.getVaultStatistics();
+case '2': {
+  var records = await db.listRecords();
+  if (records.length === 0) console.log('No records found.');
+  else records.forEach(displayRecord);
+  break;
+}
+
+case '3': {
+  var id = await ask('Enter record ID to update: ');
+  var name = await ask('New name: ');
+  var value = await ask('New value: ');
+  try {
+    var updated = await db.updateRecord(Number(id), name, value);
+    if (updated) {
+      console.log('Record updated!');
+      displayRecord(updated);
+    } else {
+      console.log('Record not found.');
+    }
+  } catch(err) {
+    console.log("Error updating record: " + err.message);
+  }
+  break;
+}
+
+case '4': {
+  var id = await ask('Enter record ID to delete: ');
+  try {
+    var deleted = await db.deleteRecord(Number(id));
+    console.log(deleted ? 'Record deleted!' : 'Record not found.');
+  } catch(err) {
+    console.log("Error deleting record: " + err.message);
+  }
+  break;
+}
+
+case '5': {
+  var term = await ask('Enter name or ID to search: ');
+  var records = await db.listRecords();
+  var lower = term.toLowerCase();
+  var results = records.filter(function(r){ return r.id.toString() === term || r.name.toLowerCase().includes(lower) || r.value.toLowerCase().includes(lower); });
+  if (results.length === 0) console.log('No records found.');
+  else results.forEach(displayRecord);
+  break;
+}
+
+case '6': {
+  var records = await db.listRecords();
+  if (records.length === 0) { console.log("No records available."); break; }
+  var field = (await ask("Sort by (name/date): ")).toLowerCase();
+  var order = (await ask("Order (asc/desc): ")).toLowerCase();
+  var sorted = records.slice();
+  if (field === "name") { sorted.sort(function(a,b){ return order === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name); }); }
+  else if (field === "date") { sorted.sort(function(a,b){ return order === "asc" ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt); }); }
+  else { console.log("Invalid field."); break; }
+  console.log("\nSorted Records:");
+  sorted.forEach(displayRecord);
+  break;
+}
+
+case '7': {
+  var records = await db.listRecords();
+  if (records.length === 0) { console.log("No records to export."); break; }
+  var now = new Date();
+  var timestamp = now.toISOString().replace(/[:.]/g,'-');
+  var fileName = "export_" + timestamp + ".txt";
+  var filePath = path.join(__dirname, '..', fileName);
+  var content = "=== NodeVault Export ===\nExport Date: " + now.toLocaleString() + "\nTotal Records: " + records.length + "\nFile Name: " + fileName + "\n========================\n\n";
+  records.forEach(function(r){ content += "ID: " + r.id + "\nName: " + r.name + "\nValue: " + r.value + "\nCreated At: " + r.createdAt + "\n---------------------\n"; });
+  fs.writeFileSync(filePath, content, 'utf8');
+  console.log("Exported to " + fileName);
+  break;
+}
+
+case '8': {
+  var stats = await db.getVaultStatistics();
   console.log("\nVault Statistics:");
   console.log("--------------------------");
-  console.log(`Total Records: ${stats.total}`);
-  console.log(`Last Modified: ${stats.lastModified}`);
-  console.log(`Longest Name: ${stats.longestName} (${stats.longestNameLength} characters)`);
-  console.log(`Earliest Record: ${stats.earliest}`);
-  console.log(`Latest Record: ${stats.latest}`);
-  menu();
+  console.log("Total Records: " + stats.total);
+  console.log("Last Modified: " + stats.lastModified);
+  console.log("Longest Name: " + stats.longestName + " (" + stats.longestNameLength + " chars)");
+  console.log("Earliest Record: " + stats.earliest);
+  console.log("Latest Record: " + stats.latest);
   break;
-
-
-      case '10':
-        console.log('Exiting NodeVault...');
-        rl.close();
-        break;
-
-      default:
-        console.log('Invalid option.');
-        menu();
-    }
-  });
 }
 
-menu();
+case '9':
+  console.log("Exiting NodeVault...");
+  rl.close();
+  process.exit(0);
+
+default:
+  console.log("Invalid option.");
+
+
+}
+
+await menu();
+}
+
+async function start() {
+try {
+await mongoose.connect(MONGO_URI);
+console.log("Connected to MongoDB");
+await menu();
+} catch(err) {
+console.error("MongoDB connection error:", err);
+process.exit(1);
+}
+}
+
+start();
 
