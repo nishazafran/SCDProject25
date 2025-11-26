@@ -1,7 +1,18 @@
-FROM node:18-alpine
+# Dockerfile
+FROM node:18
+
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
+
+# Copy package files first (for caching)
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy rest of the app
 COPY . .
+
 EXPOSE 3000
-CMD ["node", "main.js"]
+
+# Run the server
+CMD ["node", "server.js"]
